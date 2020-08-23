@@ -2,9 +2,9 @@ const { axios } = require("./fakeBackend/mock");
 
 const userIdSeparator = ',';
 
-const getUsersById = () => {
-    let result = {};
-}
+const ErrorMessages = {
+    EMPTY_FEEDBACK: { message: "Отзывов пока нет" }
+};
 
 const getUniqueValuesFromArray = (arr) => {
     let result = {};
@@ -14,13 +14,25 @@ const getUniqueValuesFromArray = (arr) => {
     });
 
     return Object.keys(result);
-}
+};
 
 const formatDate = (dateInUnix) => {
     const date = new Date(dateInUnix);
 
     return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-}
+};
+
+const sortFeedbackByDate = (a, b) => a.date - b.date;
+
+const actualizeFeedback = (feedback) => {
+    const actualizedFeedback = {};
+
+    feedback.sort(sortFeedbackByDate).forEach(f => {
+        actualizedFeedback[f.userId] = f;
+    });
+
+    return Object.values(actualizedFeedback).sort(sortFeedbackByDate);
+};
 
 const apiConfig = {
     users: (ids) => {
@@ -42,67 +54,52 @@ const apiConfig = {
 
         return `${apiRoute}${productId}`;
     }
-}
+};
+
+const responseHandler = (response) => {
+    if (!response.data.feedback.length) {
+        return ErrorMessages['EMPTY_FEEDBACK'];
+    }
+
+    return response.data;
+};
+
+const errorHandler = (error) => {
+    return { message: error.response.data.message };
+};
 
 const getFeedbackByProductViewData = async (product, actualize = false) => {
     let formattedFeedback;
-    const feedbackResponse = await axios(apiConfig.feedback(product));
+    const feedbackResponse = await axios(apiConfig.feedback(product))
+        .then(responseHandler)
+        .catch(errorHandler);
 
-    if (feedbackResponse.data && feedbackResponse.data.feedback) {
-        const { feedback } = feedbackResponse.data;
-        const userIds = getUniqueValuesFromArray(feedbackResponse.data.feedback.map(f => f.userId));
-        const usersResponse = await axios(apiConfig.users(userIds));
+    if (feedbackResponse.message) {
+        return feedbackResponse;
+    }
 
-        if (usersResponse && usersResponse.data.users) {
-            let users = {};
-            usersResponse.data.users.forEach(u => {
-                users[u.id] = u;
-            });
+    const feedback = actualize ?
+        actualizeFeedback(feedbackResponse.feedback) :
+        feedbackResponse.feedback.sort(sortFeedbackByDate);
 
-            formattedFeedback = feedbackResponse.data.feedback.map(f => {
-                return {
-                    ...f,
-                    user: `${users[f.userId].name} (${users[f.userId].email})`,
-                    date: formatDate(f.date)
-                }
-            });
-        }
+    const userIds = getUniqueValuesFromArray(feedback.map(f => f.userId));
+    const usersResponse = await axios(apiConfig.users(userIds));
+
+    if (usersResponse.data && usersResponse.data.users) {
+        let users = {};
+        usersResponse.data.users.forEach(u => {
+            users[u.id] = u;
+        });
+
+        formattedFeedback = feedback.map(f => {
+            return {
+                ...f,
+                user: `${users[f.userId].name} (${users[f.userId].email})`,
+                date: formatDate(f.date)
+            }
+        });
     }
     return { feedback: formattedFeedback };
-    // .then(response => {
-    //     if (response && response.status === 200) {
-    //         if (response.data.feedback) {
-    //             const userIds = getUniqueValuesFromArray(response.data.feedback.map(f => f.userId));
-    //
-    //             axios(apiConfig.users(userIds))
-    //                 .then(response => {
-    //                     if(response && response.status === 200) {
-    //                         if (response.data.users) {
-    //                             const usersMap = {}
-    //                             response.data.users.forEach(u => {
-    //                                 usersMap[u.id] = u;
-    //                             });
-    //
-    //                             return usersMap;
-    //                         }
-    //                     }
-    //                 })
-    //                 .then(usersMap => {
-    //                     if (usersMap) {
-    //                         return response.data.feedback.map(f => {
-    //                             return { ...f, user: `${usersMap[f.userId].name} ${usersMap[f.userId].email}` };
-    //                         });
-    //                     }
-    //                 });
-    //
-    //             return response.data;
-    //         }
-    //
-    //         return response.data;
-    //     } else {
-    //         return response.message;
-    //     }
-    // });
 };
 
 module.exports = { getFeedbackByProductViewData };

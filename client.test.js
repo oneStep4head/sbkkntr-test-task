@@ -55,7 +55,7 @@ describe("getFeedbackByProductViewData", function() {
       '2019-3-2'
     ]);
   });
-  
+
   it("возвращает сообщение, если отзывов нет", async () => {
     const { message } = await getFeedbackByProductViewData("elba");
 
