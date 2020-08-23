@@ -59,8 +59,10 @@ const getFeedbackByProductViewData = async (product, actualize = false) => {
                             }
                         })
                         .then(usersMap => {
-                            if (isersMap) {
-
+                            if (usersMap) {
+                                return response.data.feedback.map(f => {
+                                    return { ...f, user: `${usersMap[f.userId].name} ${usersMap[f.userId].email}`}
+                                })
                             }
                         });
 
