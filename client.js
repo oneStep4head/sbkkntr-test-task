@@ -16,6 +16,12 @@ const getUniqueValuesFromArray = (arr) => {
     return Object.keys(result);
 }
 
+const formatDate = (dateInUnix) => {
+    const date = new Date(dateInUnix);
+
+    return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+}
+
 const apiConfig = {
     users: (ids) => {
         let apiRoute = '/users';
@@ -39,41 +45,64 @@ const apiConfig = {
 }
 
 const getFeedbackByProductViewData = async (product, actualize = false) => {
-    return axios(apiConfig.feedback(product))
-        .then(response => {
-            if (response && response.status === 200) {
-                if (response.data.feedback) {
-                    const userIds = getUniqueValuesFromArray(response.data.feedback.map(f => f.userId));
+    let formattedFeedback;
+    const feedbackResponse = await axios(apiConfig.feedback(product));
 
-                    axios(apiConfig.users(userIds))
-                        .then(response => {
-                            if(response && response.status === 200) {
-                                if (response.data.users) {
-                                    const usersMap = {}
-                                    response.data.users.forEach(u => {
-                                        usersMap[u.id] = u;
-                                    });
+    if (feedbackResponse.data && feedbackResponse.data.feedback) {
+        const { feedback } = feedbackResponse.data;
+        const userIds = getUniqueValuesFromArray(feedbackResponse.data.feedback.map(f => f.userId));
+        const usersResponse = await axios(apiConfig.users(userIds));
 
-                                    return usersMap;
-                                }
-                            }
-                        })
-                        .then(usersMap => {
-                            if (usersMap) {
-                                return response.data.feedback.map(f => {
-                                    return { ...f, user: `${usersMap[f.userId].name} ${usersMap[f.userId].email}`}
-                                })
-                            }
-                        });
+        if (usersResponse && usersResponse.data.users) {
+            let users = {};
+            usersResponse.data.users.forEach(u => {
+                users[u.id] = u;
+            });
 
-                    return response.data;
+            formattedFeedback = feedbackResponse.data.feedback.map(f => {
+                return {
+                    ...f,
+                    user: `${users[f.userId].name} (${users[f.userId].email})`,
+                    date: formatDate(f.date)
                 }
-
-            return response.data;
-        } else {
-            return response.message;
+            });
         }
-    });
+    }
+    return { feedback: formattedFeedback };
+    // .then(response => {
+    //     if (response && response.status === 200) {
+    //         if (response.data.feedback) {
+    //             const userIds = getUniqueValuesFromArray(response.data.feedback.map(f => f.userId));
+    //
+    //             axios(apiConfig.users(userIds))
+    //                 .then(response => {
+    //                     if(response && response.status === 200) {
+    //                         if (response.data.users) {
+    //                             const usersMap = {}
+    //                             response.data.users.forEach(u => {
+    //                                 usersMap[u.id] = u;
+    //                             });
+    //
+    //                             return usersMap;
+    //                         }
+    //                     }
+    //                 })
+    //                 .then(usersMap => {
+    //                     if (usersMap) {
+    //                         return response.data.feedback.map(f => {
+    //                             return { ...f, user: `${usersMap[f.userId].name} ${usersMap[f.userId].email}` };
+    //                         });
+    //                     }
+    //                 });
+    //
+    //             return response.data;
+    //         }
+    //
+    //         return response.data;
+    //     } else {
+    //         return response.message;
+    //     }
+    // });
 };
 
 module.exports = { getFeedbackByProductViewData };
